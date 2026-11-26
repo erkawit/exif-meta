@@ -47,3 +47,812 @@
                         }
                     }
                 }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #f1f5f9;
+            color: #1e293b;
+        }
+        .font-heading {
+            font-family: 'Prompt', sans-serif;
+        }
+        #map {
+            height: 280px;
+            width: 100%;
+            border-radius: 0.75rem;
+            z-index: 10;
+        }
+        .drop-zone-active {
+            border-color: #f59e0b !important;
+            background-color: #fef3c7 !important;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-navy-900 text-white shadow-lg border-b-4 border-gold-500 sticky top-0 z-30">
+        <div class="max-w-6xl mx-auto px-4 py-3.5 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-gold-500 text-navy-950 flex items-center justify-center font-bold text-xl shadow">
+                    <i class="fa-solid fa-camera-retro"></i>
+                </div>
+                <div>
+                    <h1 class="font-heading font-bold text-lg sm:text-xl tracking-wide leading-tight">
+                        EXIF & METADATA INSPECTOR
+                    </h1>
+                    <p class="text-xs text-slate-300">ระบบตรวจสอบพิกัด วันเวลา และข้อมูลเชิงลึกของไฟล์ภาพ</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 text-xs bg-navy-800 px-3 py-1.5 rounded-full border border-slate-700">
+                <i class="fa-solid fa-shield-halved text-emerald-400"></i>
+                <span class="text-slate-200">ประมวลผลในเครื่อง 100% (ไม่อัปโหลดเข้า Server)</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-6xl w-full mx-auto px-4 py-6 space-y-6">
+
+        <!-- Upload Section -->
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-6">
+            <div id="dropZone" class="border-2 border-dashed border-slate-300 hover:border-navy-800 rounded-xl p-6 sm:p-10 text-center transition-all cursor-pointer bg-slate-50/70">
+                <!-- รองรับทุกฟอร์แมตและป้องกันบั๊กบนมือถือ -->
+                <input type="file" id="fileInput" class="hidden" accept="image/*,.heic,.heif,.dng,.raw">
+                
+                <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-navy-900/5 text-navy-900 flex items-center justify-center text-3xl">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                </div>
+                
+                <h2 class="font-heading font-semibold text-lg sm:text-xl text-navy-900 mb-1">
+                    แตะเพื่อเลือกรูปภาพ หรือลากไฟล์มาวางที่นี่
+                </h2>
+                <p class="text-sm text-slate-500 mb-4">
+                    รองรับไฟล์ JPG, PNG, WebP, HEIC/HEIF (iPhone) และไฟล์ต้นฉบับจากกล้อง
+                </p>
+
+                <button type="button" id="selectBtn" class="inline-flex items-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-heading font-medium px-6 py-2.5 rounded-lg shadow transition">
+                    <i class="fa-regular fa-folder-open text-gold-400"></i>
+                    <span>เลือกไฟล์รูปภาพ</span>
+                </button>
+
+                <!-- คำแนะนำสำหรับมือถือ -->
+                <div class="mt-5 pt-4 border-t border-slate-200/80 text-left max-w-2xl mx-auto">
+                    <p class="text-xs text-slate-600 flex items-start gap-2">
+                        <i class="fa-solid fa-mobile-screen-button text-gold-600 mt-0.5 text-sm"></i>
+                        <span>
+                            <strong class="text-navy-900">คำแนะนำสำหรับมือถือ:</strong> หากเลือกจากคลังภาพ (Gallery) แล้วไม่พบพิกัด GPS ให้กดเลือกผ่านเมนู <strong>"เลือกดู (Browse) / ไฟล์ (Files)"</strong> แล้วเลือกไฟล์ต้นฉบับจากโฟลเดอร์กล้อง (Camera) เพื่อป้องกันระบบมือถือลบค่าพิกัดอัตโนมัติ
+                        </span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Loading Indicator -->
+            <div id="loadingBox" class="hidden mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-center gap-3 text-blue-800">
+                <i class="fa-solid fa-circle-notch fa-spin text-xl"></i>
+                <span class="font-medium text-sm">กำลังอ่านข้อมูล Metadata และพิกัดภาพ...</span>
+            </div>
+
+            <!-- Error Alert -->
+            <div id="errorBox" class="hidden mt-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3 text-red-800">
+                <i class="fa-solid fa-triangle-exclamation text-lg mt-0.5"></i>
+                <div class="text-sm">
+                    <p class="font-bold">ไม่สามารถอ่านข้อมูลบางส่วนได้</p>
+                    <p id="errorMessage" class="mt-0.5 text-red-700"></p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Result Dashboard (Hidden initially) -->
+        <div id="resultSection" class="hidden space-y-6">
+
+            <!-- Privacy / Stripped EXIF Warning Banner -->
+            <div id="strippedAlert" class="hidden bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-xl shadow-sm flex items-start gap-3">
+                <i class="fa-solid fa-circle-info text-amber-600 text-xl mt-0.5"></i>
+                <div class="text-sm text-amber-900">
+                    <p class="font-heading font-semibold text-base">ไม่พบข้อมูลกล้องหรือพิกัด GPS ในไฟล์นี้</p>
+                    <p class="mt-1 leading-relaxed">
+                        ไฟล์ภาพนี้อาจถูกส่งต่อผ่านแอปแชท (เช่น <strong>LINE, Facebook Messenger</strong>) หรือถูกระบบเลือกภาพของมือถือลบข้อมูล EXIF ออกเพื่อความเป็นส่วนตัว ทำให้เหลือเฉพาะข้อมูลขนาดและนามสกุลไฟล์พื้นฐานเท่านั้น
+                    </p>
+                </div>
+            </div>
+
+            <!-- Top Grid: Preview & Quick Highlights -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Left: Image Preview & Actions (5 cols) -->
+                <div class="lg:col-span-5 bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-heading font-semibold text-navy-900 flex items-center gap-2">
+                                <i class="fa-regular fa-image text-gold-600"></i> ตัวอย่างภาพถ่าย
+                            </h3>
+                            <span id="badgeExt" class="px-2.5 py-0.5 text-xs font-bold uppercase rounded bg-navy-900 text-gold-400">JPG</span>
+                        </div>
+                        
+                        <div class="relative bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center min-h-[240px] max-h-[360px] border border-slate-200">
+                            <img id="previewImg" src="" alt="Preview" class="max-h-[360px] w-auto object-contain">
+                            <div id="noPreviewPlaceholder" class="hidden text-center p-6 text-slate-400">
+                                <i class="fa-solid fa-file-image text-4xl mb-2"></i>
+                                <p class="text-xs">เบราว์เซอร์ไม่รองรับการแสดงภาพตัวอย่างไฟล์นี้<br>แต่สามารถอ่านข้อมูล Metadata ได้ตามปกติ</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="mt-5 pt-4 border-t border-slate-100 space-y-2.5">
+                        <button type="button" id="cleanDownloadBtn" class="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-heading font-medium py-2.5 px-4 rounded-xl shadow-sm transition text-sm">
+                            <i class="fa-solid fa-eraser"></i>
+                            <span>ลบรอยเท้าดิจิทัล (ล้าง GPS/EXIF) & ดาวน์โหลด</span>
+                        </button>
+                        
+                        <div class="grid grid-cols-2 gap-2">
+                            <button type="button" id="exportTxtBtn" class="flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 px-3 rounded-lg transition text-xs">
+                                <i class="fa-regular fa-file-lines"></i> บันทึกรายงาน (.TXT)
+                            </button>
+                            <button type="button" id="exportJsonBtn" class="flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 px-3 rounded-lg transition text-xs">
+                                <i class="fa-solid fa-code"></i> ส่งออกข้อมูล (.JSON)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Key Metadata Cards (7 cols) -->
+                <div class="lg:col-span-7 space-y-6">
+                    
+                    <!-- 1. วันเวลาและสถานที่ -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+                        <h3 class="font-heading font-semibold text-navy-900 text-base mb-4 pb-2 border-b border-slate-100 flex items-center gap-2">
+                            <i class="fa-regular fa-calendar-check text-gold-600"></i> ข้อมูลวันเวลาและสถานที่ถ่ายภาพ
+                        </h3>
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                                <p class="text-xs text-slate-500 mb-1">วันที่และเวลาที่ถ่าย (ต้นฉบับ)</p>
+                                <p id="valDateThai" class="font-heading font-semibold text-navy-900 text-base">-</p>
+                                <p id="valDateAgo" class="text-xs text-gold-600 font-medium mt-0.5">-</p>
+                            </div>
+                            <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                                <p class="text-xs text-slate-500 mb-1">วันที่แก้ไขไฟล์ล่าสุด</p>
+                                <p id="valLastModified" class="font-medium text-slate-800 text-sm">-</p>
+                                <p id="valTimezone" class="text-xs text-slate-400 mt-0.5">-</p>
+                            </div>
+                        </div>
+
+                        <!-- GPS Map Section -->
+                        <div class="mt-4 pt-4 border-t border-slate-100">
+                            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                                <div>
+                                    <p class="text-xs text-slate-500">พิกัดตำแหน่ง (GPS Coordinates)</p>
+                                    <p id="valGpsText" class="font-mono font-semibold text-sm text-navy-900">ไม่พบข้อมูลพิกัด GPS</p>
+                                </div>
+                                <div id="gpsActions" class="hidden flex items-center gap-2">
+                                    <button type="button" id="copyGpsBtn" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition">
+                                        <i class="fa-regular fa-copy"></i> คัดลอกพิกัด
+                                    </button>
+                                    <a id="googleMapsLink" href="#" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition inline-flex items-center gap-1.5">
+                                        <i class="fa-solid fa-map-location-dot"></i> เปิด Google Maps
+                                    </a>
+                                </div>
+                            </div>
+                            
+                            <!-- Map Container -->
+                            <div id="mapWrapper" class="hidden">
+                                <div id="map"></div>
+                            </div>
+                            <div id="noMapPlaceholder" class="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-6 text-center text-slate-400 text-sm">
+                                <i class="fa-solid fa-location-dot-slash text-2xl mb-1.5 text-slate-300"></i>
+                                <p>ไม่มีข้อมูลตำแหน่งที่ตั้งฝังอยู่ในรูปภาพนี้</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. ข้อมูลไฟล์และขนาดภาพ -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+                        <h3 class="font-heading font-semibold text-navy-900 text-base mb-4 pb-2 border-b border-slate-100 flex items-center gap-2">
+                            <i class="fa-solid fa-file-code text-gold-600"></i> ข้อมูลไฟล์และขนาดภาพ
+                        </h3>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                            <div class="p-3 bg-slate-50 rounded-xl">
+                                <p class="text-xs text-slate-500">ขนาดไฟล์</p>
+                                <p id="valFileSize" class="font-bold text-navy-900 mt-0.5">-</p>
+                            </div>
+                            <div class="p-3 bg-slate-50 rounded-xl">
+                                <p class="text-xs text-slate-500">นามสกุล / MIME</p>
+                                <p id="valFileType" class="font-bold text-navy-900 mt-0.5">-</p>
+                            </div>
+                            <div class="p-3 bg-slate-50 rounded-xl">
+                                <p class="text-xs text-slate-500">ความละเอียด (px)</p>
+                                <p id="valDimensions" class="font-bold text-navy-900 mt-0.5">-</p>
+                            </div>
+                            <div class="p-3 bg-slate-50 rounded-xl">
+                                <p class="text-xs text-slate-500">ความคมชัด / สัดส่วน</p>
+                                <p id="valMegapixels" class="font-bold text-navy-900 mt-0.5">-</p>
+                            </div>
+                        </div>
+                        <div class="mt-3 px-3 py-2 bg-slate-50 rounded-lg text-xs text-slate-600 break-all">
+                            <span class="font-semibold text-slate-800">ชื่อไฟล์:</span> <span id="valFileName">-</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Camera Settings & Technical Specs -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+                <h3 class="font-heading font-semibold text-navy-900 text-base mb-4 pb-2 border-b border-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-gold-600"></i> ข้อมูลอุปกรณ์กล้องและการตั้งค่าการถ่ายภาพ
+                </h3>
+                
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 text-sm">
+                    <div class="p-3 border border-slate-100 rounded-xl bg-slate-50/50">
+                        <p class="text-xs text-slate-500">ยี่ห้อ / รุ่นกล้อง</p>
+                        <p id="valCamera" class="font-semibold text-navy-900 mt-0.5 break-words">-</p>
+                    </div>
+                    <div class="p-3 border border-slate-100 rounded-xl bg-slate-50/50">
+                        <p class="text-xs text-slate-500">รูรับแสง (Aperture)</p>
+                        <p id="valAperture" class="font-semibold text-navy-900 mt-0.5">-</p>
+                    </div>
+                    <div class="p-3 border border-slate-100 rounded-xl bg-slate-50/50">
+                        <p class="text-xs text-slate-500">ความเร็วชัตเตอร์</p>
+                        <p id="valShutter" class="font-semibold text-navy-900 mt-0.5">-</p>
+                    </div>
+                    <div class="p-3 border border-slate-100 rounded-xl bg-slate-50/50">
+                        <p class="text-xs text-slate-500">ค่าความไวแสง (ISO)</p>
+                        <p id="valIso" class="font-semibold text-navy-900 mt-0.5">-</p>
+                    </div>
+                    <div class="p-3 border border-slate-100 rounded-xl bg-slate-50/50">
+                        <p class="text-xs text-slate-500">ทางยาวโฟกัส</p>
+                        <p id="valFocal" class="font-semibold text-navy-900 mt-0.5">-</p>
+                    </div>
+                    <div class="p-3 border border-slate-100 rounded-xl bg-slate-50/50">
+                        <p class="text-xs text-slate-500">ซอฟต์แวร์ / แฟลช</p>
+                        <p id="valSoftware" class="font-semibold text-navy-900 mt-0.5 break-words">-</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Raw EXIF Tags Table -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <h3 class="font-heading font-semibold text-navy-900 text-base flex items-center gap-2">
+                        <i class="fa-solid fa-table-list text-gold-600"></i> ข้อมูล Metadata เชิงลึกทั้งหมด (Raw Tags)
+                    </h3>
+                    <div class="relative w-full sm:w-64">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="tagSearchInput" placeholder="ค้นหาชื่อ Tag หรือค่าข้อมูล..." class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-navy-800">
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto max-h-80 border border-slate-200 rounded-xl">
+                    <table class="w-full text-left border-collapse text-xs sm:text-sm">
+                        <thead class="bg-navy-900 text-white sticky top-0">
+                            <tr>
+                                <th class="py-2.5 px-4 font-heading font-medium w-1/3">ชื่อ Tag (Attribute)</th>
+                                <th class="py-2.5 px-4 font-heading font-medium">ค่าข้อมูล (Value)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rawTagsBody" class="divide-y divide-slate-200">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-4 mt-8">
+        <div class="max-w-6xl mx-auto px-4 text-center text-xs text-slate-500">
+            EXIF & Metadata Inspector — ประมวลผลฝั่ง Client-Side 100% รูปภาพของคุณไม่ถูกส่งออกจากอุปกรณ์
+        </div>
+    </footer>
+
+    <!-- Application Logic -->
+    <script>
+        // Elements
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const selectBtn = document.getElementById('selectBtn');
+        const loadingBox = document.getElementById('loadingBox');
+        const errorBox = document.getElementById('errorBox');
+        const errorMessage = document.getElementById('errorMessage');
+        const resultSection = document.getElementById('resultSection');
+        const strippedAlert = document.getElementById('strippedAlert');
+        const previewImg = document.getElementById('previewImg');
+        const noPreviewPlaceholder = document.getElementById('noPreviewPlaceholder');
+
+        // Global State
+        let currentFile = null;
+        let currentReportData = {};
+        let currentObjectUrl = null;
+        let leafletMap = null;
+        let leafletMarker = null;
+        let allRawTags = [];
+
+        // Event Listeners for Upload
+        selectBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            fileInput.click();
+        });
+
+        dropZone.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                processSelectedFile(e.target.files[0]);
+            }
+        });
+
+        // Drag & Drop Events
+        ['dragenter', 'dragover'].forEach(evt => {
+            dropZone.addEventListener(evt, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.add('drop-zone-active');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(evt => {
+            dropZone.addEventListener(evt, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove('drop-zone-active');
+            });
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            const files = e.dataTransfer.files;
+            if (files && files.length > 0) {
+                processSelectedFile(files[0]);
+            }
+        });
+
+        // Main File Processing Function (Mobile-Safe)
+        async function processSelectedFile(file) {
+            currentFile = file;
+            resetUI();
+            loadingBox.classList.remove('hidden');
+
+            try {
+                // 1. ข้อมูลพื้นฐานของไฟล์ (ทำงานได้เสมอแม้ไม่มี EXIF)
+                const fileName = file.name || 'unknown_image';
+                const extMatch = fileName.match(/\.([0-9a-z]+)$/i);
+                const fileExt = extMatch ? extMatch[1].toUpperCase() : (file.type.split('/')[1] || 'IMG').toUpperCase();
+                const fileSizeFormatted = formatBytes(file.size);
+                const lastModDate = file.lastModified ? new Date(file.lastModified) : null;
+
+                document.getElementById('badgeExt').textContent = fileExt;
+                document.getElementById('valFileName').textContent = fileName;
+                document.getElementById('valFileSize').textContent = `${fileSizeFormatted} (${file.size.toLocaleString()} bytes)`;
+                document.getElementById('valFileType').textContent = `${fileExt} (${file.type || 'ไม่ระบุ MIME'})`;
+                document.getElementById('valLastModified').textContent = lastModDate ? formatThaiDateTime(lastModDate) : '-';
+
+                // 2. อ่านไฟล์เป็น ArrayBuffer เพื่อส่งให้ exifr (เสถียรกว่าการส่ง File object บนมือถือบางรุ่น)
+                let arrayBuffer = null;
+                try {
+                    arrayBuffer = await file.arrayBuffer();
+                } catch (bufErr) {
+                    console.warn('ไม่สามารถอ่าน ArrayBuffer โดยตรง:', bufErr);
+                }
+
+                // 3. แสดงภาพตัวอย่าง (รองรับ HEIC)
+                await renderImagePreview(file, fileExt);
+
+                // 4. อ่านข้อมูล EXIF / GPS / XMP / IPTC ด้วย exifr
+                let exifData = null;
+                let gpsData = null;
+                try {
+                    const source = arrayBuffer || file;
+                    exifData = await exifr.parse(source, {
+                        tiff: true,
+                        exif: true,
+                        gps: true,
+                        xmp: true,
+                        icc: false,
+                        iptc: true
+                    });
+                    gpsData = await exifr.gps(source).catch(() => null);
+                } catch (exifErr) {
+                    console.warn('ข้ามการอ่าน EXIF (อาจไม่มีข้อมูล):', exifErr);
+                }
+
+                // 5. ประมวลผลและแสดงข้อมูลทั้งหมด
+                populateMetadataUI(exifData, gpsData, {
+                    fileName,
+                    fileExt,
+                    fileSize: fileSizeFormatted,
+                    mimeType: file.type,
+                    lastModified: lastModDate
+                });
+
+                resultSection.classList.remove('hidden');
+
+            } catch (err) {
+                console.error('เกิดข้อผิดพลาดหลัก:', err);
+                errorMessage.textContent = `รายละเอียด: ${err.message || 'ไฟล์อาจเสียหายหรือไม่รองรับ'}`;
+                errorBox.classList.remove('hidden');
+            } finally {
+                loadingBox.classList.add('hidden');
+                // รีเซ็ต input เพื่อให้เลือกไฟล์เดิมซ้ำได้
+                fileInput.value = '';
+            }
+        }
+
+        // Render Image Preview safely
+        async function renderImagePreview(file, fileExt) {
+            if (currentObjectUrl) {
+                URL.revokeObjectURL(currentObjectUrl);
+                currentObjectUrl = null;
+            }
+
+            previewImg.classList.remove('hidden');
+            noPreviewPlaceholder.classList.add('hidden');
+
+            const isHeic = fileExt === 'HEIC' || fileExt === 'HEIF' || file.type === 'image/heic' || file.type === 'image/heif';
+
+            try {
+                let blobToDisplay = file;
+                if (isHeic && typeof heic2any !== 'undefined') {
+                    const convertedBlob = await heic2any({
+                        blob: file,
+                        toType: 'image/jpeg',
+                        quality: 0.8
+                    });
+                    blobToDisplay = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+                }
+
+                currentObjectUrl = URL.createObjectURL(blobToDisplay);
+                
+                await new Promise((resolve) => {
+                    previewImg.onload = () => {
+                        const w = previewImg.naturalWidth;
+                        const h = previewImg.naturalHeight;
+                        if (w && h) {
+                            const mp = ((w * h) / 1000000).toFixed(2);
+                            const gcdVal = gcd(w, h);
+                            const ratio = `${w / gcdVal}:${h / gcdVal}`;
+                            document.getElementById('valDimensions').textContent = `${w} × ${h} px`;
+                            document.getElementById('valMegapixels').textContent = `${mp} MP (${ratio})`;
+                        }
+                        resolve();
+                    };
+                    previewImg.onerror = () => {
+                        previewImg.classList.add('hidden');
+                        noPreviewPlaceholder.classList.remove('hidden');
+                        resolve();
+                    };
+                    previewImg.src = currentObjectUrl;
+                });
+            } catch (e) {
+                console.warn('ไม่สามารถสร้างภาพตัวอย่าง:', e);
+                previewImg.classList.add('hidden');
+                noPreviewPlaceholder.classList.remove('hidden');
+            }
+        }
+
+        // Populate UI with Metadata
+        function populateMetadataUI(exif, gps, basicInfo) {
+            const hasExif = exif && Object.keys(exif).length > 0;
+
+            if (!hasExif) {
+                strippedAlert.classList.remove('hidden');
+            } else {
+                strippedAlert.classList.add('hidden');
+            }
+
+            // 1. วันเวลาถ่ายภาพ
+            const rawDate = exif?.DateTimeOriginal || exif?.CreateDate || exif?.ModifyDate || null;
+            if (rawDate instanceof Date && !isNaN(rawDate)) {
+                document.getElementById('valDateThai').textContent = formatThaiDateTime(rawDate);
+                document.getElementById('valDateAgo').textContent = timeAgoThai(rawDate);
+                document.getElementById('valTimezone').textContent = exif?.OffsetTimeOriginal ? `เขตเวลา: UTC${exif.OffsetTimeOriginal}` : 'เวลาตามเครื่องบันทึก';
+            } else {
+                document.getElementById('valDateThai').textContent = 'ไม่พบข้อมูลวันเวลาถ่ายภาพ';
+                document.getElementById('valDateAgo').textContent = 'อาจถูกลบค่า EXIF';
+                document.getElementById('valTimezone').textContent = '-';
+            }
+
+            // 2. ขนาดภาพจาก EXIF (กรณีภาพตัวอย่างโหลดไม่ได้ เช่น HEIC บนบางเครื่อง)
+            if (document.getElementById('valDimensions').textContent === '-') {
+                const ew = exif?.ExifImageWidth || exif?.ImageWidth;
+                const eh = exif?.ExifImageHeight || exif?.ImageHeight;
+                if (ew && eh) {
+                    const mp = ((ew * eh) / 1000000).toFixed(2);
+                    document.getElementById('valDimensions').textContent = `${ew} × ${eh} px`;
+                    document.getElementById('valMegapixels').textContent = `${mp} MP`;
+                }
+            }
+
+            // 3. ข้อมูลกล้องและการตั้งค่า
+            const make = exif?.Make ? String(exif.Make).trim() : '';
+            const model = exif?.Model ? String(exif.Model).trim() : '';
+            const cameraFull = (make && model.toLowerCase().startsWith(make.toLowerCase())) ? model : `${make} ${model}`.trim();
+            
+            document.getElementById('valCamera').textContent = cameraFull || '-';
+            document.getElementById('valAperture').textContent = exif?.FNumber ? `f/${exif.FNumber}` : '-';
+            document.getElementById('valShutter').textContent = exif?.ExposureTime ? formatShutterSpeed(exif.ExposureTime) : '-';
+            document.getElementById('valIso').textContent = exif?.ISO ? `ISO ${exif.ISO}` : '-';
+            document.getElementById('valFocal').textContent = exif?.FocalLength ? `${exif.FocalLength} mm` : '-';
+            
+            const software = exif?.Software ? String(exif.Software).trim() : '';
+            const flash = exif?.Flash !== undefined ? (String(exif.Flash).includes('Fired') || exif.Flash === 1 ? 'เปิดแฟลช' : 'ไม่เปิดแฟลช') : '';
+            document.getElementById('valSoftware').textContent = [software, flash].filter(Boolean).join(' / ') || '-';
+
+            // 4. พิกัด GPS & แผนที่
+            const lat = gps?.latitude ?? exif?.latitude;
+            const lon = gps?.longitude ?? exif?.longitude;
+
+            const mapWrapper = document.getElementById('mapWrapper');
+            const noMapPlaceholder = document.getElementById('noMapPlaceholder');
+            const gpsActions = document.getElementById('gpsActions');
+
+            if (typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon)) {
+                const latFixed = lat.toFixed(6);
+                const lonFixed = lon.toFixed(6);
+                const coordStr = `${latFixed}, ${lonFixed}`;
+
+                document.getElementById('valGpsText').textContent = coordStr;
+                document.getElementById('googleMapsLink').href = `https://www.google.com/maps?q=${latFixed},${lonFixed}`;
+                
+                gpsActions.classList.remove('hidden');
+                noMapPlaceholder.classList.add('hidden');
+                mapWrapper.classList.remove('hidden');
+
+                renderMap(lat, lon, coordStr);
+            } else {
+                document.getElementById('valGpsText').textContent = 'ไม่พบข้อมูลพิกัด GPS';
+                gpsActions.classList.add('hidden');
+                mapWrapper.classList.add('hidden');
+                noMapPlaceholder.classList.remove('hidden');
+            }
+
+            // 5. ตาราง Raw Tags
+            allRawTags = [];
+            if (hasExif) {
+                for (const [key, val] of Object.entries(exif)) {
+                    if (val instanceof Uint8Array || val instanceof ArrayBuffer) continue;
+                    let displayVal = val;
+                    if (val instanceof Date) {
+                        displayVal = formatThaiDateTime(val);
+                    } else if (typeof val === 'object' && val !== null) {
+                        displayVal = JSON.stringify(val);
+                    }
+                    allRawTags.push({ key, value: String(displayVal) });
+                }
+            }
+            renderRawTagsTable(allRawTags);
+
+            // เก็บข้อมูลสำหรับ Export
+            currentReportData = {
+                fileInfo: basicInfo,
+                capturedAt: rawDate ? formatThaiDateTime(rawDate) : null,
+                gps: (typeof lat === 'number' && typeof lon === 'number') ? { latitude: lat, longitude: lon, googleMaps: `https://www.google.com/maps?q=${lat},${lon}` } : null,
+                camera: {
+                    device: cameraFull || null,
+                    aperture: exif?.FNumber || null,
+                    shutterSpeed: exif?.ExposureTime ? formatShutterSpeed(exif.ExposureTime) : null,
+                    iso: exif?.ISO || null,
+                    focalLength: exif?.FocalLength || null,
+                    software: software || null
+                },
+                rawMetadata: exif || {}
+            };
+        }
+
+        // Render Leaflet Map
+        function renderMap(lat, lon, label) {
+            setTimeout(() => {
+                if (!leafletMap) {
+                    leafletMap = L.map('map').setView([lat, lon], 16);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '&copy; OpenStreetMap contributors'
+                    }).addTo(leafletMap);
+                    leafletMarker = L.marker([lat, lon]).addTo(leafletMap);
+                } else {
+                    leafletMap.setView([lat, lon], 16);
+                    leafletMarker.setLatLng([lat, lon]);
+                }
+                leafletMarker.bindPopup(`<b>ตำแหน่งที่ถ่ายภาพ</b><br>${label}`).openPopup();
+                leafletMap.invalidateSize();
+            }, 150);
+        }
+
+        // Render Raw Tags Table
+        function renderRawTagsTable(tags) {
+            const tbody = document.getElementById('rawTagsBody');
+            tbody.innerHTML = '';
+
+            if (!tags || tags.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="2" class="py-6 text-center text-slate-400">ไม่พบข้อมูล Metadata เชิงลึกในไฟล์นี้</td></tr>`;
+                return;
+            }
+
+            tags.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50';
+                tr.innerHTML = `
+                    <td class="py-2 px-4 font-mono text-xs font-semibold text-navy-900 break-all">${escapeHtml(item.key)}</td>
+                    <td class="py-2 px-4 text-xs text-slate-700 break-all">${escapeHtml(item.value)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Search Raw Tags
+        document.getElementById('tagSearchInput').addEventListener('input', (e) => {
+            const kw = e.target.value.toLowerCase().trim();
+            if (!kw) {
+                renderRawTagsTable(allRawTags);
+                return;
+            }
+            const filtered = allRawTags.filter(t => 
+                t.key.toLowerCase().includes(kw) || t.value.toLowerCase().includes(kw)
+            );
+            renderRawTagsTable(filtered);
+        });
+
+        // Copy GPS Coordinates
+        document.getElementById('copyGpsBtn').addEventListener('click', () => {
+            const text = document.getElementById('valGpsText').textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.getElementById('copyGpsBtn');
+                const orig = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-check text-emerald-600"></i> คัดลอกแล้ว';
+                setTimeout(() => btn.innerHTML = orig, 2000);
+            });
+        });
+
+        // Strip Metadata & Download Clean Image
+        document.getElementById('cleanDownloadBtn').addEventListener('click', () => {
+            if (!previewImg.src || previewImg.classList.contains('hidden')) {
+                alert('ไม่สามารถล้างข้อมูลจากไฟล์ประเภทนี้ได้ กรุณาใช้ไฟล์ JPG หรือ PNG');
+                return;
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = previewImg.naturalWidth;
+            canvas.height = previewImg.naturalHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(previewImg, 0, 0);
+
+            canvas.toBlob((blob) => {
+                if (!blob) return;
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const baseName = (currentFile?.name || 'image').replace(/\.[^/.]+$/, '');
+                a.href = url;
+                a.download = `${baseName}_clean.jpg`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 'image/jpeg', 0.95);
+        });
+
+        // Export TXT Report
+        document.getElementById('exportTxtBtn').addEventListener('click', () => {
+            const d = currentReportData;
+            const lines = [
+                '=== รายงานตรวจสอบข้อมูลภาพถ่าย (EXIF & Metadata Report) ===',
+                `ชื่อไฟล์: ${d.fileInfo?.fileName || '-'}`,
+                `ขนาดไฟล์: ${d.fileInfo?.fileSize || '-'}`,
+                `ประเภทไฟล์: ${d.fileInfo?.fileType || '-'}`,
+                `วันที่ถ่ายภาพ: ${d.capturedAt || 'ไม่พบข้อมูล'}`,
+                `พิกัด GPS: ${d.gps ? `${d.gps.latitude}, ${d.gps.longitude}` : 'ไม่พบข้อมูล'}`,
+                `ลิงก์แผนที่: ${d.gps ? d.gps.googleMaps : '-'}`,
+                `อุปกรณ์กล้อง: ${d.camera?.device || '-'}`,
+                `การตั้งค่า: ${d.camera?.aperture ? 'f/' + d.camera.aperture : '-'} | ${d.camera?.shutterSpeed || '-'} | ISO ${d.camera?.iso || '-'}`,
+                '=========================================================='
+            ].join('\n');
+
+            downloadTextFile(lines, `${(currentFile?.name || 'report')}_metadata.txt`, 'text/plain;charset=utf-8');
+        });
+
+        // Export JSON Report
+        document.getElementById('exportJsonBtn').addEventListener('click', () => {
+            const jsonStr = JSON.stringify(currentReportData, null, 2);
+            downloadTextFile(jsonStr, `${(currentFile?.name || 'report')}_metadata.json`, 'application/json;charset=utf-8');
+        });
+
+        // Helper Functions
+        function resetUI() {
+            errorBox.classList.add('hidden');
+            resultSection.classList.add('hidden');
+            strippedAlert.classList.add('hidden');
+            document.getElementById('valDimensions').textContent = '-';
+            document.getElementById('valMegapixels').textContent = '-';
+            document.getElementById('tagSearchInput').value = '';
+        }
+
+        function formatBytes(bytes, decimals = 2) {
+            if (!+bytes) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+        }
+
+        function formatThaiDateTime(date) {
+            const thaiMonths = [
+                'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+                'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+            ];
+            const day = date.getDate();
+            const month = thaiMonths[date.getMonth()];
+            const year = date.getFullYear() + 543;
+            const hours = String(date.getHours()).padStart(2, '0');
+            const mins = String(date.getMinutes()).padStart(2, '0');
+            const secs = String(date.getSeconds()).padStart(2, '0');
+            return `${day} ${month} พ.ศ. ${year} เวลา ${hours}:${mins}:${secs} น.`;
+        }
+
+        function timeAgoThai(date) {
+            const seconds = Math.floor((new Date() - date) / 1000);
+            if (seconds < 0) return 'เวลาในอนาคต (ตั้งค่านาฬิกากล้องไม่ตรง)';
+            const intervals = [
+                { label: 'ปี', seconds: 31536000 },
+                { label: 'เดือน', seconds: 2592000 },
+                { label: 'วัน', seconds: 86400 },
+                { label: 'ชั่วโมง', seconds: 3600 },
+                { label: 'นาที', seconds: 60 }
+            ];
+            for (const item of intervals) {
+                const count = Math.floor(seconds / item.seconds);
+                if (count >= 1) return `(ถ่ายไว้เมื่อ ${count} ${item.label}ที่แล้ว)`;
+            }
+            return '(เพิ่งถ่ายเมื่อสักครู่)';
+        }
+
+        function formatShutterSpeed(val) {
+            if (!val) return '-';
+            if (val >= 1) return `${val} วินาที`;
+            const denom = Math.round(1 / val);
+            return `1/${denom} วินาที`;
+        }
+
+        function gcd(a, b) {
+            return b === 0 ? a : gcd(b, a % b);
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/[&<>"']/g, m => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[m]));
+        }
+
+        function downloadTextFile(content, filename, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
